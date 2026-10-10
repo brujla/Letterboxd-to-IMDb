@@ -79,6 +79,12 @@ def get_imdb_id(letterboxd_uri):
 
     return re_match[0]
 
+def get_session_id_from_cookie(cookie_str):
+    """Extrai o session-id do cookie para usar como x-amzn-sessionid"""
+    match = re.search(r'session-id=([^;]+)', cookie_str)
+    if match:
+        return match.group(1).strip()
+    return None
 
 def rate_on_imdb(imdb_id, rating):
     req_body = {
@@ -89,9 +95,16 @@ def rate_on_imdb(imdb_id, rating):
             "titleId": imdb_id
         }
     }
+    session_id = get_session_id_from_cookie(imdb_cookie)
     headers = {
         "content-type": "application/json",
-        "cookie": imdb_cookie
+        "cookie": imdb_cookie,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://www.imdb.com",
+        "Referer": "https://www.imdb.com/",
+        "x-amzn-sessionid": session_id or "",
     }
 
     resp = requests.post("https://api.graphql.imdb.com/",
@@ -114,19 +127,26 @@ def rate_on_imdb(imdb_id, rating):
 
 
 def add_to_imdb_watchlist(imdb_id):
+    session_id = get_session_id_from_cookie(imdb_cookie)
     headers = {
         "content-type": "application/json",
-        "cookie": imdb_cookie
+        "cookie": imdb_cookie,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Origin": "https://www.imdb.com",
+        "Referer": "https://www.imdb.com/",
+        "x-amzn-sessionid": session_id or "",
     }
-
+    
     resp = requests.put(
         f"https://www.imdb.com/watchlist/{imdb_id}", headers=headers)
-
-    if resp.status_code != 200:
-        if resp.status_code == 429:
-            raise RateLimitError("IMDb Rate limit exceeded")
-        raise ValueError(
-            f"Error adding to IMDb watchlist. Code: {resp.status_code}")
+    
+    if resp.status_code in (200, 202):
+        return
+ 
+    if resp.status_code == 429:
+        raise RateLimitError("IMDb Rate limit exceeded")
 
     if resp.status_code == 403:
         print(f"Failed to authenticate with cookie")
